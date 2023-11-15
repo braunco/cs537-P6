@@ -12,6 +12,7 @@ typedef enum scode {
 } status_code_t;
 
 #define GETJOBCMD "/GetJob"
+#define DelayHeader "Delay"
 
 /*
  * A simple HTTP library.

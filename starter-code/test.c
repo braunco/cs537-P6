@@ -64,8 +64,40 @@ void test_queue_full() {
     safequeue_destroy(&q);
 }
 
+void test_queue_empty() {
+    printf("\nTest 3: Queue Empty\n");
+    safequeue_t q;
+    safequeue_init(&q, MAX_SIZE);
+
+    // Attempt to dequeue from an empty queue
+    printf("Attempting to dequeue from empty queue...\n");
+    if (safequeue_is_empty(&q)) {
+        printf("Queue is empty, cannot dequeue.\n");
+    } else {
+        int *data = safequeue_dequeue(&q);
+        printf("Dequeued: %d\n", *data);
+        free(data);
+    }
+
+    // Enqueue an item to allow the dequeue operation to complete
+    int *extra_data = malloc(sizeof(int));
+    *extra_data = 99;
+    safequeue_enqueue(&q, extra_data);
+    printf("Enqueued: %d (to allow dequeue from empty queue)\n", *extra_data);
+
+    // Dequeue the item
+    if (!safequeue_is_empty(&q)) {
+        int *data = safequeue_dequeue(&q);
+        printf("Dequeued: %d\n", *data);
+        free(data);
+    }
+
+    safequeue_destroy(&q);
+}
+
 int main() {
     test_basic_functionality();
     test_queue_full();
+    test_queue_empty();
     return 0;
 }

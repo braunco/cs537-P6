@@ -32,7 +32,7 @@ void safequeue_destroy(safequeue_t *q) {
 
 // Enqueue data to the queue
 /*Adds a new element to the end of the queue. It waits if the queue is full*/
-void safequeue_enqueue(safequeue_t *q, void *data) {
+void safequeue_enqueue(safequeue_t *q, void *data, int priority) {
     pthread_mutex_lock(&q->lock);
 
     // Wait while queue is full
@@ -43,16 +43,20 @@ void safequeue_enqueue(safequeue_t *q, void *data) {
     // Create a new node
     node_t *new_node = malloc(sizeof(node_t));
     new_node->data = data;
+    new_node->priority = priority;
     new_node->next = NULL;
 
-    // Add the new node to the queue
-    if (q->tail != NULL) {
-        q->tail->next = new_node;
+    // Find the correct position to insert the new node
+    // Higher number indicates higher priority
+    node_t **tracer = &q->head;
+    while (*tracer != NULL && (*tracer)->priority <= priority) {
+        tracer = &(*tracer)->next;
     }
-    q->tail = new_node;
+    new_node->next = *tracer;
+    *tracer = new_node;
 
-    if (q->head == NULL) {
-        q->head = new_node;
+    if (q->tail == NULL || q->tail->priority < priority) {
+        q->tail = new_node;
     }
 
     q->size++;
@@ -62,6 +66,7 @@ void safequeue_enqueue(safequeue_t *q, void *data) {
 
     pthread_mutex_unlock(&q->lock);
 }
+
 
 // Dequeue data from the queue
 /*Removes an element from the front of the queue. It waits if the queue is empty*/

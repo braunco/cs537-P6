@@ -6,6 +6,7 @@
 // Define the node structure for the queue
 typedef struct node {
     void *data;                 // Pointer to the data
+    int priority;               // Priority of the request
     struct node *next;          // Pointer to the next node
 } node_t;
 
@@ -23,7 +24,7 @@ typedef struct {
 // Function prototypes
 void safequeue_init(safequeue_t *q, int max_size);
 void safequeue_destroy(safequeue_t *q);
-void safequeue_enqueue(safequeue_t *q, void *data);
+void safequeue_enqueue(safequeue_t *q, void *data, int priority);
 void *safequeue_dequeue(safequeue_t *q);
 int safequeue_is_empty(safequeue_t *q);
 int safequeue_size(safequeue_t *q);

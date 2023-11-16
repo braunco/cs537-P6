@@ -14,8 +14,8 @@ void test_basic_functionality() {
     for (int i = 0; i < 5; i++) {
         int *data = malloc(sizeof(int));
         *data = i;
-        safequeue_enqueue(&q, data);
-        printf("Enqueued: %d\n", *data);
+        safequeue_enqueue(&q, data, i);  // Include priority
+        printf("Enqueued: %d with priority %d\n", *data, i);
     }
 
     // Dequeue all items
@@ -37,8 +37,8 @@ void test_queue_full() {
     for (int i = 0; i < MAX_SIZE; i++) {
         int *data = malloc(sizeof(int));
         *data = i;
-        safequeue_enqueue(&q, data);
-        printf("Enqueued: %d\n", *data);
+        safequeue_enqueue(&q, data, i);  // Include priority
+        printf("Enqueued: %d with priority %d\n", *data, i);
     }
 
     // Dequeue one item to make space
@@ -51,8 +51,8 @@ void test_queue_full() {
     // Try to enqueue another item
     int *extra_data = malloc(sizeof(int));
     *extra_data = 5;
-    safequeue_enqueue(&q, extra_data);
-    printf("Enqueued: %d\n", *extra_data);
+    safequeue_enqueue(&q, extra_data, 5);
+    printf("Enqueued: %d with priority %d\n", *extra_data, 5);
 
     // Dequeue remaining items
     while (!safequeue_is_empty(&q)) {
@@ -81,12 +81,37 @@ void test_queue_empty() {
 
     // Enqueue an item to allow the dequeue operation to complete
     int *extra_data = malloc(sizeof(int));
-    *extra_data = 99;
-    safequeue_enqueue(&q, extra_data);
-    printf("Enqueued: %d (to allow dequeue from empty queue)\n", *extra_data);
+    *extra_data = 1;
+    safequeue_enqueue(&q, extra_data, 1);  // Include priority
+    printf("Enqueued: %d with priority %d (to allow dequeue from empty queue)\n", *extra_data, 99);
 
     // Dequeue the item
     if (!safequeue_is_empty(&q)) {
+        int *data = safequeue_dequeue(&q);
+        printf("Dequeued: %d\n", *data);
+        free(data);
+    }
+
+    safequeue_destroy(&q);
+}
+
+void test_priority_queue() {
+    printf("\nTest 4: Priority Queue\n");
+    safequeue_t q;
+    safequeue_init(&q, MAX_SIZE);
+
+    // Enqueue items with different priorities
+    int priorities[] = {3, 1, 4, 2, 5};
+    for (int i = 0; i < 5; i++) {
+        int *data = malloc(sizeof(int));
+        *data = i;
+        safequeue_enqueue(&q, data, priorities[i]);
+        printf("Enqueued: %d with priority %d\n", *data, priorities[i]);
+    }
+
+    // Dequeue items and check if they are in priority order
+    printf("Dequeuing in priority order:\n");
+    while (!safequeue_is_empty(&q)) {
         int *data = safequeue_dequeue(&q);
         printf("Dequeued: %d\n", *data);
         free(data);
@@ -99,5 +124,6 @@ int main() {
     test_basic_functionality();
     test_queue_full();
     test_queue_empty();
+    test_priority_queue();
     return 0;
 }

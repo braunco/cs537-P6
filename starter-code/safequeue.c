@@ -46,16 +46,16 @@ void safequeue_enqueue(safequeue_t *q, void *data, int priority) {
     new_node->priority = priority;
     new_node->next = NULL;
 
-    // Find the correct position to insert the new node
-    // Higher number indicates higher priority
+    // Find the correct position for the new node based on priority
     node_t **tracer = &q->head;
-    while (*tracer != NULL && (*tracer)->priority <= priority) {
+    while (*tracer != NULL && (*tracer)->priority >= priority) {
         tracer = &(*tracer)->next;
     }
     new_node->next = *tracer;
     *tracer = new_node;
 
-    if (q->tail == NULL || q->tail->priority < priority) {
+    // Update tail if necessary
+    if (q->tail == NULL || q->tail->next == new_node) {
         q->tail = new_node;
     }
 
@@ -66,6 +66,7 @@ void safequeue_enqueue(safequeue_t *q, void *data, int priority) {
 
     pthread_mutex_unlock(&q->lock);
 }
+
 
 
 // Dequeue data from the queue

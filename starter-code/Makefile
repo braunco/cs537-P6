@@ -13,5 +13,8 @@ $(EXECUTABLE): $(OBJECTS)
 .c.o:
 	$(CC) $(CFLAGS) $< -o $@
 
+test: all
+	~cs537-1/tests/P6/runtests
+
 clean:
 	rm -f $(EXECUTABLE) $(OBJECTS)

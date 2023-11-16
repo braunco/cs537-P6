@@ -3,54 +3,69 @@
 #include <stdlib.h>
 #include <pthread.h>
 
-#define NUM_THREADS 10
-#define OPERATIONS_PER_THREAD 100
+#define MAX_SIZE 5
 
-// Thread function for enqueueing
-void *enqueue_thread(void *arg) {
-    safequeue_t *q = (safequeue_t *)arg;
-    for (int i = 0; i < OPERATIONS_PER_THREAD; ++i) {
-        int *data = malloc(sizeof(int));
-        *data = i; // Assign some data
-        safequeue_enqueue(q, data);
-    }
-    return NULL;
-}
-
-// Thread function for dequeueing
-void *dequeue_thread(void *arg) {
-    safequeue_t *q = (safequeue_t *)arg;
-    for (int i = 0; i < OPERATIONS_PER_THREAD; ++i) {
-        int *data = safequeue_dequeue(q);
-        if (data) {
-            // Process data
-            free(data);
-        }
-    }
-    return NULL;
-}
-
-int main() {
+void test_basic_functionality() {
+    printf("Test 1: Basic Functionality\n");
     safequeue_t q;
-    safequeue_init(&q, NUM_THREADS * OPERATIONS_PER_THREAD);
+    safequeue_init(&q, MAX_SIZE);
 
-    pthread_t threads[NUM_THREADS];
-
-    // Create threads for enqueueing
-    for (int i = 0; i < NUM_THREADS / 2; ++i) {
-        pthread_create(&threads[i], NULL, enqueue_thread, &q);
+    // Enqueue some items
+    for (int i = 0; i < 5; i++) {
+        int *data = malloc(sizeof(int));
+        *data = i;
+        safequeue_enqueue(&q, data);
+        printf("Enqueued: %d\n", *data);
     }
 
-    // Create threads for dequeueing
-    for (int i = NUM_THREADS / 2; i < NUM_THREADS; ++i) {
-        pthread_create(&threads[i], NULL, dequeue_thread, &q);
-    }
-
-    // Join threads
-    for (int i = 0; i < NUM_THREADS; ++i) {
-        pthread_join(threads[i], NULL);
+    // Dequeue all items
+    while (!safequeue_is_empty(&q)) {
+        int *data = safequeue_dequeue(&q);
+        printf("Dequeued: %d\n", *data);
+        free(data);
     }
 
     safequeue_destroy(&q);
+}
+
+void test_queue_full() {
+    printf("\nTest 2: Queue Full\n");
+    safequeue_t q;
+    safequeue_init(&q, MAX_SIZE);
+
+    // Enqueue items until the queue is full
+    for (int i = 0; i < MAX_SIZE; i++) {
+        int *data = malloc(sizeof(int));
+        *data = i;
+        safequeue_enqueue(&q, data);
+        printf("Enqueued: %d\n", *data);
+    }
+
+    // Dequeue one item to make space
+    if (!safequeue_is_empty(&q)) {
+        int *data = safequeue_dequeue(&q);
+        printf("(Normally will wait here - Dequeueing to make space): %d\n", *data);
+        free(data);
+    }
+
+    // Try to enqueue another item
+    int *extra_data = malloc(sizeof(int));
+    *extra_data = 5;
+    safequeue_enqueue(&q, extra_data);
+    printf("Enqueued: %d\n", *extra_data);
+
+    // Dequeue remaining items
+    while (!safequeue_is_empty(&q)) {
+        int *data = safequeue_dequeue(&q);
+        printf("Dequeued: %d\n", *data);
+        free(data);
+    }
+
+    safequeue_destroy(&q);
+}
+
+int main() {
+    test_basic_functionality();
+    test_queue_full();
     return 0;
 }

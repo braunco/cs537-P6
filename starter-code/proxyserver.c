@@ -106,12 +106,89 @@ void serve_request(int client_fd) {
 }
 
 
+
+
 int server_fds[MAX_LISTENERS]; // 65535 - 1024 + 1 (for inclusivity)
 /*
  * opens a TCP stream socket on all interfaces with port number PORTNO. Saves
  * the fd number of the server socket in *socket_number. For each accepted
  * connection, calls request_handler with the accepted fd number.
  */
+
+void *serve_forever(void *arg) {
+    int proxy_port = *((int *)arg);
+    free(arg);                      // Free allocated memory
+
+    //printf("Entering local server creation\n");
+    // Create a socket to listen
+    int local_server_fd = socket(PF_INET, SOCK_STREAM, 0);
+    if (local_server_fd == -1) {
+        perror("Failed to create a new socket");
+        exit(errno);
+    }
+    //printf("finished local server creation\n");
+
+    //printf("Starting socket options\n");
+    // manipulate options for the socket
+    int socket_option = 1;
+    if (setsockopt(local_server_fd, SOL_SOCKET, SO_REUSEADDR, &socket_option,
+                   sizeof(socket_option)) == -1) {
+        perror("Failed to set socket options");
+        exit(errno);
+    }
+    //printf("Finsihed socket options\n");
+
+    struct sockaddr_in proxy_address;
+    memset(&proxy_address, 0, sizeof(proxy_address));
+    proxy_address.sin_family = AF_INET;
+    proxy_address.sin_addr.s_addr = INADDR_ANY;
+    proxy_address.sin_port = htons(proxy_port);
+
+    //printf("Starting bind\n");
+    if (bind(local_server_fd, (struct sockaddr *)&proxy_address, sizeof(proxy_address)) == -1) {
+        perror("Failed to bind on socket");
+        exit(errno);
+    }
+    //printf("Finished bind\n");
+
+    //printf("Starting Listen\n");
+    if (listen(local_server_fd, 1024) == -1) {
+        perror("Failed to listen on socket");
+        exit(errno);
+    }
+    //printf("Finished Listen\n");
+
+    //printf("Listening on port %d...\n", proxy_port);
+
+    struct sockaddr_in client_address;
+    size_t client_address_length = sizeof(client_address);
+    int client_fd;
+    while (1) {
+        //printf("Entering While loop in serve_forever\n");
+        client_fd = accept(local_server_fd, (struct sockaddr *)&client_address, (socklen_t *)&client_address_length);
+        if (client_fd < 0) {
+            perror("Error accepting socket");
+            continue;
+        }
+
+        printf("Accepted connection from %s on port %d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
+
+
+        // TODO: Add logic here to parse requests and handle them accordingly
+
+        serve_request(client_fd);
+
+        shutdown(client_fd, SHUT_WR);
+        close(client_fd);
+    }
+
+    close(local_server_fd);
+    return NULL;
+
+}
+
+
+/*
 void serve_forever(int listener_id) {
 
     int* server_fd = &server_fds[listener_id];
@@ -142,8 +219,9 @@ void serve_forever(int listener_id) {
     proxy_address.sin_port = htons(proxy_port); // listening port
 
     // bind the socket to the address and port number specified in
-    if (bind(*server_fd, (struct sockaddr *)&proxy_address,
-             sizeof(proxy_address)) == -1) {
+    int returnval = bind(*server_fd, (struct sockaddr *)&proxy_address, sizeof(proxy_address));
+    printf("bind value: %d\n", returnval);
+    if ( returnval == -1) {
         perror("Failed to bind on socket 1");
         exit(errno);
     }
@@ -163,17 +241,18 @@ void serve_forever(int listener_id) {
     int client_fd;
     while (1) {
 
-        //printf("inside while loop %d\n", listener_id);
+        printf("inside while loop %d\n", listener_id);
         
         client_fd = accept(*server_fd,
                            (struct sockaddr *)&client_address,
                            (socklen_t *)&client_address_length);
+        printf("client_fd: %d\n", client_fd);
         if (client_fd < 0) {
             perror("Error accepting socket");
             continue;
         }
 
-        //printf("passed accept %d\n", listener_id);
+        printf("passed accept %d\n", listener_id);
 
         printf("Accepted connection from %s on port %d\n",
                inet_ntoa(client_address.sin_addr),
@@ -181,19 +260,22 @@ void serve_forever(int listener_id) {
 
         serve_request(client_fd);
 
-        //printf("passed serve request %d\n", listener_id);
+        printf("passed serve request %d\n", listener_id);
 
         // close the connection to the client
         shutdown(client_fd, SHUT_WR);
-        //printf("passed shutdown %d\n", listener_id);
+        printf("passed shutdown %d\n", listener_id);
 
         close(client_fd);
-        //printf("passed close %d\n", listener_id);
+        printf("passed close %d\n", listener_id);
     }
 
     shutdown(*server_fd, SHUT_RDWR);
     close(*server_fd);
 }
+*/
+
+
 
 /*
  * Default settings for in the global configuration variables
@@ -242,6 +324,7 @@ void exit_with_usage() {
     exit(EXIT_SUCCESS);
 }
 
+/*
 void *make_listeners(void* listener_id) {
 
     int listener_id_int = *((int*)listener_id);
@@ -257,11 +340,70 @@ void *make_listeners(void* listener_id) {
 
     return 0;
 }
+*/
 
 int main(int argc, char **argv) {
     signal(SIGINT, signal_callback_handler);
 
-    /* Default settings */
+    // Default settings
+    default_settings();
+
+    // Parsing command-line arguments
+    for (int i = 1; i < argc; i++) {
+        if (strcmp("-l", argv[i]) == 0) {
+            num_listener = atoi(argv[++i]);
+            free(listener_ports);
+            listener_ports = (int *)malloc(num_listener * sizeof(int));
+            for (int j = 0; j < num_listener; j++) {
+                listener_ports[j] = atoi(argv[++i]);
+            }
+        } else if (strcmp("-w", argv[i]) == 0) {
+            num_workers = atoi(argv[++i]);
+        } else if (strcmp("-q", argv[i]) == 0) {
+            max_queue_size = atoi(argv[++i]);
+        } else if (strcmp("-i", argv[i]) == 0) {
+            fileserver_ipaddr = argv[++i];
+        } else if (strcmp("-p", argv[i]) == 0) {
+            fileserver_port = atoi(argv[++i]);
+        } else {
+            fprintf(stderr, "Unrecognized option: %s\n", argv[i]);
+            exit_with_usage();
+        }
+    }
+
+    print_settings();
+
+    // Create and start listening threads
+    // Create and start listening threads
+    pthread_t *threads = malloc(num_listener * sizeof(pthread_t));
+    for (int i = 0; i < num_listener; ++i) {
+        int *port = malloc(sizeof(int));  // Allocate memory to pass the port number
+        *port = listener_ports[i];
+        if (pthread_create(&threads[i], NULL, serve_forever, port) != 0) {
+            perror("Failed to create thread");
+            // Handle thread creation failure
+        }
+    }
+
+    // Join threads
+    for (int i = 0; i < num_listener; ++i) {
+        if (pthread_join(threads[i], NULL) != 0) {
+            perror("Failed to join thread");
+            // Handle thread join failure
+        }
+    }
+
+    free(threads); // Free the threads array
+
+    return EXIT_SUCCESS;
+}
+
+
+/*
+int main(int argc, char **argv) {
+    signal(SIGINT, signal_callback_handler);
+
+    // Default settings
     default_settings();
 
     int i;
@@ -313,3 +455,4 @@ int main(int argc, char **argv) {
 
     return EXIT_SUCCESS;
 }
+*/

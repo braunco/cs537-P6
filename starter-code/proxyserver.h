@@ -42,6 +42,12 @@ struct http_request {
     char *path;
     char *delay;
 };
+/*
+typedef struct {
+    struct http_request *request;  // Pointer to the HTTP request
+    int client_fd;                 // Client file descriptor
+} request_info_t;
+*/
 
 /*
  * Functions for sending an HTTP response.

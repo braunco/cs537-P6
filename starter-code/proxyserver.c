@@ -21,6 +21,7 @@
  * Constants
  */
 #define RESPONSE_BUFSIZE 10000
+#define MAX_LISTENERS 65112
 
 /*
  * Global configuration variables.
@@ -105,13 +106,15 @@ void serve_request(int client_fd) {
 }
 
 
-int server_fd;
+int server_fds[MAX_LISTENERS]; // 65535 - 1024 + 1 (for inclusivity)
 /*
  * opens a TCP stream socket on all interfaces with port number PORTNO. Saves
  * the fd number of the server socket in *socket_number. For each accepted
  * connection, calls request_handler with the accepted fd number.
  */
-void serve_forever(int *server_fd) {
+void serve_forever(int listener_id) {
+
+    int* server_fd = &server_fds[listener_id];
 
     // create a socket to listen
     *server_fd = socket(PF_INET, SOCK_STREAM, 0);
@@ -129,7 +132,8 @@ void serve_forever(int *server_fd) {
     }
 
 
-    int proxy_port = listener_ports[0];
+    int proxy_port = listener_ports[listener_id];
+    printf("proxy port: %d\n", proxy_port);
     // create the full address of this proxyserver
     struct sockaddr_in proxy_address;
     memset(&proxy_address, 0, sizeof(proxy_address));
@@ -140,9 +144,11 @@ void serve_forever(int *server_fd) {
     // bind the socket to the address and port number specified in
     if (bind(*server_fd, (struct sockaddr *)&proxy_address,
              sizeof(proxy_address)) == -1) {
-        perror("Failed to bind on socket");
+        perror("Failed to bind on socket 1");
         exit(errno);
     }
+
+    printf("Listening with listener id: %d on port %d\n", listener_id, proxy_port);
 
     // starts waiting for the client to request a connection
     if (listen(*server_fd, 1024) == -1) {
@@ -156,6 +162,9 @@ void serve_forever(int *server_fd) {
     size_t client_address_length = sizeof(client_address);
     int client_fd;
     while (1) {
+
+        //printf("inside while loop %d\n", listener_id);
+        
         client_fd = accept(*server_fd,
                            (struct sockaddr *)&client_address,
                            (socklen_t *)&client_address_length);
@@ -164,15 +173,22 @@ void serve_forever(int *server_fd) {
             continue;
         }
 
+        //printf("passed accept %d\n", listener_id);
+
         printf("Accepted connection from %s on port %d\n",
                inet_ntoa(client_address.sin_addr),
                client_address.sin_port);
 
         serve_request(client_fd);
 
+        //printf("passed serve request %d\n", listener_id);
+
         // close the connection to the client
         shutdown(client_fd, SHUT_WR);
+        //printf("passed shutdown %d\n", listener_id);
+
         close(client_fd);
+        //printf("passed close %d\n", listener_id);
     }
 
     shutdown(*server_fd, SHUT_RDWR);
@@ -210,7 +226,9 @@ void print_settings() {
 void signal_callback_handler(int signum) {
     printf("Caught signal %d: %s\n", signum, strsignal(signum));
     for (int i = 0; i < num_listener; i++) {
-        if (close(server_fd) < 0) perror("Failed to close server_fd (ignoring)\n");
+        if(server_fds[i] != 0) {
+            if (close(server_fds[i]) < 0) perror("Failed to close server_fd (ignoring)\n");
+        }
     }
     free(listener_ports);
     exit(0);
@@ -222,6 +240,22 @@ char *USAGE =
 void exit_with_usage() {
     fprintf(stderr, "%s", USAGE);
     exit(EXIT_SUCCESS);
+}
+
+void *make_listeners(void* listener_id) {
+
+    int listener_id_int = *((int*)listener_id);
+
+    printf("\tabout to serve forever... listener_id: %d\n", listener_id_int);
+
+    // int actualPort = listener_ports[listener_id_int];
+    // int* localServerFd = &server_fds[listener_id_int];
+
+    serve_forever(listener_id_int);
+
+    //pthread_exit(0);
+
+    return 0;
 }
 
 int main(int argc, char **argv) {
@@ -254,7 +288,28 @@ int main(int argc, char **argv) {
     }
     print_settings();
 
-    serve_forever(&server_fd);
+    pthread_t threads[num_listener];
+    int thread_id[num_listener];
+
+    memset(server_fds, 0, MAX_LISTENERS * sizeof(int));
+
+    printf("num listeners: %d\n", num_listener);
+
+    for(int i=0; i<num_listener; i++) {
+        printf("Starting thread %d\n", i);
+        thread_id[i] = i;
+        // int* port = malloc(sizeof(int));
+        // *port = i;
+        if(pthread_create(&threads[i], NULL, &make_listeners, &thread_id[i]) < 0) {
+            printf("Failed to make thread\n");
+        }
+    }
+
+    for(int i=0; i<num_listener; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    //serve_forever(&server_fd);
 
     return EXIT_SUCCESS;
 }

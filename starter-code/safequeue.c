@@ -120,6 +120,7 @@ void *get_work_nonblocking(safequeue_t *q) {
     free(temp);  // Free the dequeued node
     return data; // Return the data of the dequeued node
 
+}
 // Check if the queue is empty
 /*Returns 1 if the queue is empty, otherwise 0.*/
 int safequeue_is_empty(safequeue_t *q) {

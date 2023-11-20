@@ -15,11 +15,11 @@
 #include <unistd.h>
 
 #include "proxyserver.h"
-/*
+
 #include "safequeue.h"
 
 safequeue_t request_queue;
-*/
+
 
 
 /*
@@ -40,13 +40,14 @@ char *fileserver_ipaddr;
 int fileserver_port;
 int max_queue_size;
 
-/*
+
 void serve_request(int client_fd);
 void free_http_request(struct http_request *req);
 
+
 void *worker_thread_function(void *arg) {
     while (1) {
-        request_info_t *req_info = safequeue_dequeue(&request_queue);
+        request_info_t *req_info = get_work_blocking(&request_queue);
         if (req_info != NULL) {
             serve_request(req_info->client_fd);
             free_http_request(req_info->request); // Free the http_request
@@ -62,7 +63,7 @@ int get_request_priority(const char *path) {
     sscanf(path, "/%d/", &priority);
     return priority;
 }
-*/
+
 
 void send_error_response(int client_fd, status_code_t err_code, char *err_msg) {
     http_start_response(client_fd, err_code);
@@ -134,7 +135,6 @@ void serve_request(int client_fd) {
     free(buffer);
 }
 
-/*
 void free_http_request(struct http_request *req) {
     if (req) {
         // Free individual fields of req
@@ -144,7 +144,6 @@ void free_http_request(struct http_request *req) {
         free(req);
     }
 }
-*/
 
 
 int server_fds[MAX_LISTENERS]; // 65535 - 1024 + 1 (for inclusivity)
@@ -154,6 +153,132 @@ int server_fds[MAX_LISTENERS]; // 65535 - 1024 + 1 (for inclusivity)
  * connection, calls request_handler with the accepted fd number.
  */
 
+void handle_getjob_request(int client_fd) {
+    pthread_mutex_lock(&request_queue.lock);
+    if (safequeue_is_empty(&request_queue)) {
+        pthread_mutex_unlock(&request_queue.lock);
+        send_error_response(client_fd, QUEUE_EMPTY, "Queue is empty");
+    } else {
+        request_info_t *dequeued_request = get_work_blocking(&request_queue);
+        pthread_mutex_unlock(&request_queue.lock);
+        http_start_response(client_fd, OK);
+        http_send_header(client_fd, "Content-Type", "text/plain");
+        http_end_headers(client_fd);
+        http_send_string(client_fd, dequeued_request->request->path);
+        free_http_request(dequeued_request->request);
+        free(dequeued_request);
+    }
+}
+
+
+void handle_normal_request(int client_fd, struct http_request *http_request) {
+    request_info_t *req_info = malloc(sizeof(request_info_t));
+    if (req_info == NULL) {
+        send_error_response(client_fd, SERVER_ERROR, "Server Error");
+        return;
+    }
+
+    req_info->request = http_request;
+    req_info->client_fd = client_fd;
+    int priority = get_request_priority(http_request->path);
+
+    pthread_mutex_lock(&request_queue.lock);
+    if (safequeue_size(&request_queue) < max_queue_size) {
+        add_work(&request_queue, req_info, priority);
+    } else {
+        send_error_response(client_fd, QUEUE_FULL, "Priority queue is full");
+        free_http_request(http_request);
+        free(req_info);
+    }
+    pthread_mutex_unlock(&request_queue.lock);
+}
+
+
+void *serve_forever(void *arg) {
+    int proxy_port = *((int *)arg);
+    free(arg);                      // Free allocated memory
+
+    // Create a socket to listen
+    int local_server_fd = socket(PF_INET, SOCK_STREAM, 0);
+    if (local_server_fd == -1) {
+        perror("Failed to create a new socket");
+        exit(errno);
+    }
+
+    // manipulate options for the socket
+    int socket_option = 1;
+    if (setsockopt(local_server_fd, SOL_SOCKET, SO_REUSEADDR, &socket_option,
+                   sizeof(socket_option)) == -1) {
+        perror("Failed to set socket options");
+        exit(errno);
+    }
+
+    struct sockaddr_in proxy_address;
+    memset(&proxy_address, 0, sizeof(proxy_address));
+    proxy_address.sin_family = AF_INET;
+    proxy_address.sin_addr.s_addr = INADDR_ANY;
+    proxy_address.sin_port = htons(proxy_port);
+
+    
+    if (bind(local_server_fd, (struct sockaddr *)&proxy_address, sizeof(proxy_address)) == -1) {
+        perror("Failed to bind on socket");
+        exit(errno);
+    }
+    
+    if (listen(local_server_fd, 1024) == -1) {
+        perror("Failed to listen on socket");
+        exit(errno);
+    }
+    if (local_server_fd < 0) exit(EXIT_FAILURE); // Exit if socket setup fails
+    
+    printf("Listening on port %d...\n", proxy_port);
+
+    
+    struct sockaddr_in client_address;
+    size_t client_address_length = sizeof(client_address);
+    int client_fd;
+
+    while (1) {
+        client_fd = accept(local_server_fd, (struct sockaddr *)&client_address, (socklen_t *)&client_address_length);
+        if (client_fd < 0) {
+            perror("Error accepting socket");
+            continue;
+        }
+
+        printf("Accepted connection from %s on port %d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
+
+        /*
+        struct http_request *http_request = http_request_parse(client_fd);
+        if (http_request != NULL) {
+            if (strcmp(http_request->path, GETJOBCMD) == 0) {
+                handle_getjob_request(client_fd);
+            } else {
+                handle_normal_request(client_fd, http_request);
+            }
+            free_http_request(http_request);
+        } else {
+            send_error_response(client_fd, BAD_REQUEST, "Bad Request");
+        }
+
+        if (http_request && strcmp(http_request->path, GETJOBCMD) != 0) {
+            serve_request(client_fd);
+        }
+        */
+        
+       // remove
+       serve_request(client_fd);
+
+        shutdown(client_fd, SHUT_WR);
+        close(client_fd);   
+    }
+
+
+    close(local_server_fd);
+    return NULL;
+}
+
+
+/*
 void *serve_forever(void *arg) {
     int proxy_port = *((int *)arg);
     free(arg);                      // Free allocated memory
@@ -208,24 +333,56 @@ void *serve_forever(void *arg) {
 
 
         // TODO: Add logic here to parse requests and handle them accordingly
-        /*
-        // Parse the request to get the path and determine its priority
         
+        // Parse the request to get the path and determine its priority
         struct http_request *http_request = http_request_parse(client_fd);
         if (http_request != NULL) {
-            request_info_t *req_info = malloc(sizeof(request_info_t));
-            req_info->request = http_request;
-            req_info->client_fd = client_fd;
-            int priority = get_request_priority(http_request->path);
-            safequeue_enqueue(&request_queue, req_info, priority);
+            if (strcmp(http_request->path, GETJOBCMD) == 0) {
+                if (safequeue_is_empty(&request_queue)) {
+                    send_error_response(client_fd, QUEUE_EMPTY, "Queue is empty");
+                } else {
+                    request_info_t *dequeued_request = safequeue_dequeue(&request_queue);
+                    http_start_response(client_fd, OK);
+                    http_send_header(client_fd, "Content-Type", "text/plain");
+                    http_end_headers(client_fd);
+                    http_send_string(client_fd, dequeued_request->request->path);
+                    free_http_request(dequeued_request->request);
+                    free(dequeued_request);
+                }
+            } else {
+                // Handling normal requests
+                request_info_t *req_info = malloc(sizeof(request_info_t));
+                if (req_info == NULL) {
+                    // Handle memory allocation failure
+                    perror("Failed to allocate memory for request info");
+                    send_error_response(client_fd, SERVER_ERROR, "Server Error");
+                    shutdown(client_fd, SHUT_WR);
+                    close(client_fd);
+                    continue;
+                }
+                req_info->request = http_request;
+                req_info->client_fd = client_fd;
+                int priority = get_request_priority(http_request->path);
+                pthread_mutex_lock(&request_queue.lock);
+                if (safequeue_size(&request_queue) < max_queue_size) {
+                    safequeue_enqueue(&request_queue, req_info, priority);
+                } else {
+                    // Queue is full, send error response
+                    send_error_response(client_fd, QUEUE_FULL, "Priority queue is full");
+                    free_http_request(http_request);
+                    free(req_info);
+                }
+                pthread_mutex_unlock(&request_queue.lock);
+
+            }
         } else {
             // Close client_fd in case of parse error
-            shutdown(client_fd, SHUT_WR);
-            close(client_fd);
+            send_error_response(client_fd, BAD_REQUEST, "Bad Request");
         }
-        */
 
-        serve_request(client_fd);
+        if (http_request && strcmp(http_request->path, GETJOBCMD) != 0) {
+            serve_request(client_fd);
+        }
         
         shutdown(client_fd, SHUT_WR);
         close(client_fd);   
@@ -235,6 +392,7 @@ void *serve_forever(void *arg) {
     return NULL;
 
 }
+*/
 
 
 /*
@@ -273,6 +431,9 @@ void signal_callback_handler(int signum) {
         }
     }
     free(listener_ports);
+
+    destroy_queue(&request_queue);
+
     exit(0);
 }
 
@@ -286,7 +447,7 @@ void exit_with_usage() {
 
 int main(int argc, char **argv) {
     signal(SIGINT, signal_callback_handler);
-    //safequeue_init(&request_queue, max_queue_size); // Initialize the safequeue
+    
 
     // Default settings
     default_settings();
@@ -313,6 +474,8 @@ int main(int argc, char **argv) {
             exit_with_usage();
         }
     }
+
+    create_queue(&request_queue, max_queue_size); // Initialize the safequeue
 
     print_settings();
 

@@ -47,8 +47,15 @@ void free_http_request(struct http_request *req);
 /*
 void *worker_thread_function(void *arg) {
     while (1) {
+        
+        //while(safequeue_is_empty(&request_queue)) {
+          //  pthread_cond_wait(&request_queue.not_empty, &request_queue.lock);
+        //}
+        
+
         request_info_t *req_info = get_work_blocking(&request_queue);
 
+        if (req_info != NULL) {
         int delay = req_info->request->delay ? atoi(req_info->request->delay) : 0;
         if (delay > 0) {
             sleep(delay);
@@ -58,6 +65,7 @@ void *worker_thread_function(void *arg) {
 
         free_http_request(req_info->request);
         free(req_info);
+    }
     }
     
     return NULL;
@@ -91,7 +99,7 @@ void send_error_response(int client_fd, status_code_t err_code, char *err_msg) {
  * forward the fileserver response to the client
  */
 void serve_request(int client_fd, struct http_request *http_request) {
-    printf("Entered serve_request\n");
+    //printf("Entered serve_request\n");
 
     // create a fileserver socket
     int fileserver_fd = socket(PF_INET, SOCK_STREAM, 0);
@@ -99,18 +107,18 @@ void serve_request(int client_fd, struct http_request *http_request) {
         fprintf(stderr, "Failed to create a new socket: error %d: %s\n", errno, strerror(errno));
         exit(errno);
     }
-    printf("Did fileserver socket\n");
+    //printf("Did fileserver socket\n");
 
     // create the full fileserver address
     struct sockaddr_in fileserver_address;
     fileserver_address.sin_addr.s_addr = inet_addr(fileserver_ipaddr);
     fileserver_address.sin_family = AF_INET;
     fileserver_address.sin_port = htons(fileserver_port);
-    printf("Did fileserver address\n");
+    //printf("Did fileserver address\n");
 
     // connect to the fileserver
     int connection_status = connect(fileserver_fd, (struct sockaddr *)&fileserver_address, sizeof(fileserver_address));
-    printf("Connected to fileserver\n");
+    //printf("Connected to fileserver\n");
 
     if (connection_status < 0) {
         // failed to connect to the fileserver
@@ -420,6 +428,7 @@ int main(int argc, char **argv) {
         }
     }
 
+
     /*
     // Create worker threads
     pthread_t worker_threads[num_workers];
@@ -444,8 +453,7 @@ int main(int argc, char **argv) {
     for (int i = 0; i < num_workers; ++i) {
         pthread_join(worker_threads[i], NULL);
     }
-
-    destroy_queue(&request_queue);  // Cleanup
+    destroy_queue(&request_queue);
     */
     free(threads); // Free the threads array
 

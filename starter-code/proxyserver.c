@@ -48,12 +48,7 @@ void free_http_request(struct http_request *req);
 void *worker_thread_function(void *arg) {
     while (1) {
         request_info_t *req_info = get_work_blocking(&request_queue);
-        if (req_info != NULL) {
-            serve_request(req_info->client_fd);
-            free_http_request(req_info->request); // Free the http_request
-            free(req_info); // Free the request_info_t struct
-        }
-    }
+
 }
 */
 
@@ -73,8 +68,9 @@ void send_error_response(int client_fd, status_code_t err_code, char *err_msg) {
     http_send_header(client_fd, "Content-Type", "text/html");
     http_end_headers(client_fd);
     char *buf = malloc(strlen(err_msg) + 2);
-    sprintf(buf, "%s\n", err_msg);
+    sprintf(buf, "%s\n", err_msg); // Added a line to see where print
     http_send_string(client_fd, buf);
+    free(buf);
     return;
 }
 
@@ -216,12 +212,9 @@ void handle_normal_request(int client_fd, struct http_request *http_request) {
     req_info->client_fd = client_fd;
     int priority = get_request_priority(http_request->path);
 
+    int current_queue_size = safequeue_size(&request_queue);
     
-    
-    //printf("Before finding size\n");
-    int val = safequeue_size(&request_queue);
-    //printf("val: %d\n", val);
-    if (val < max_queue_size) {
+    if (current_queue_size < max_queue_size) {
         //printf("Entered second h_n_r if statement\n");
         add_work(&request_queue, req_info, priority);
     } else {
@@ -295,6 +288,7 @@ void *serve_forever(void *arg) {
             if (strcmp(http_request->path, GETJOBCMD) == 0) {
                 //printf("Entered second if statement\n");
                 handle_getjob_request(client_fd);
+                //serve_request(client_fd, http_request);
                 //printf("reaches here\n");
             } else {
                 //printf("Entered first else statement\n");
@@ -439,7 +433,7 @@ int main(int argc, char **argv) {
         pthread_join(worker_threads[i], NULL);
     }
 
-    safequeue_destroy(&request_queue);  // Cleanup
+    destroy_queue(&request_queue);  // Cleanup
     */
     free(threads); // Free the threads array
 

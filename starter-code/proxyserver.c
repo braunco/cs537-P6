@@ -49,6 +49,18 @@ void *worker_thread_function(void *arg) {
     while (1) {
         request_info_t *req_info = get_work_blocking(&request_queue);
 
+        int delay = req_info->request->delay ? atoi(req_info->request->delay) : 0;
+        if (delay > 0) {
+            sleep(delay);
+        }
+
+        serve_request(req_info->client_fd, req_info->request);
+
+        free_http_request(req_info->request);
+        free(req_info);
+    }
+    
+    return NULL;
 }
 */
 

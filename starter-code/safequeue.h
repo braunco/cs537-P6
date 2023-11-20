@@ -22,10 +22,11 @@ typedef struct {
 } safequeue_t;
 
 // Function prototypes
-void safequeue_init(safequeue_t *q, int max_size);
-void safequeue_destroy(safequeue_t *q);
-void safequeue_enqueue(safequeue_t *q, void *data, int priority);
-void *safequeue_dequeue(safequeue_t *q);
+void create_queue(safequeue_t *q, int max_size);
+void destroy_queue(safequeue_t *q);
+void add_work(safequeue_t *q, void *data, int priority);
+void *get_work_blocking(safequeue_t *q);
+void *get_work_nonblocking(safequeue_t *q);
 int safequeue_is_empty(safequeue_t *q);
 int safequeue_size(safequeue_t *q);
 

@@ -4,7 +4,7 @@
 // Initialize the queue
 /*Initializes the queue, setting head and tail to NULL, size to 0,
 and initializing the mutex and condition variables*/
-void safequeue_init(safequeue_t *q, int max_size) {
+void create_queue(safequeue_t *q, int max_size) {
     q->head = NULL;
     q->tail = NULL;
     q->size = 0;
@@ -16,7 +16,7 @@ void safequeue_init(safequeue_t *q, int max_size) {
 
 // Destroy the queue
 /*Frees all nodes in the queue and destroys the mutex and condition variables*/
-void safequeue_destroy(safequeue_t *q) {
+void destroy_queue(safequeue_t *q) {
     // Free all nodes
     while (q->head != NULL) {
         node_t *temp = q->head;
@@ -32,7 +32,7 @@ void safequeue_destroy(safequeue_t *q) {
 
 // Enqueue data to the queue
 /*Adds a new element to the end of the queue. It waits if the queue is full*/
-void safequeue_enqueue(safequeue_t *q, void *data, int priority) {
+void add_work(safequeue_t *q, void *data, int priority) {
     pthread_mutex_lock(&q->lock);
 
     // Wait while queue is full
@@ -71,7 +71,7 @@ void safequeue_enqueue(safequeue_t *q, void *data, int priority) {
 
 // Dequeue data from the queue
 /*Removes an element from the front of the queue. It waits if the queue is empty*/
-void *safequeue_dequeue(safequeue_t *q) {
+void *get_work_blocking(safequeue_t *q) {
     pthread_mutex_lock(&q->lock);
 
     // Wait while queue is empty
@@ -97,6 +97,28 @@ void *safequeue_dequeue(safequeue_t *q) {
 
     return data;
 }
+
+void *get_work_nonblocking(safequeue_t *q) {
+    pthread_mutex_lock(&q->lock);
+    // Check if queue is empty and return immediately
+    if (q->size == 0) {
+        pthread_mutex_unlock(&q->lock);
+        return NULL;
+    }
+
+    // Dequeue logic (similar to get_work_blocking)
+    node_t *temp = q->head;
+    void *data = temp->data;
+    q->head = q->head->next;
+    if (q->head == NULL) {
+        q->tail = NULL;
+    }
+
+    q->size--;
+    pthread_mutex_unlock(&q->lock);
+
+    free(temp);  // Free the dequeued node
+    return data; // Return the data of the dequeued node
 
 // Check if the queue is empty
 /*Returns 1 if the queue is empty, otherwise 0.*/

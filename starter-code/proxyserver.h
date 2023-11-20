@@ -177,6 +177,9 @@ char *http_get_response_message(int status_code) {
         return "Not Found";
     case 405:
         return "Method Not Allowed";
+    case QUEUE_EMPTY:
+        //printf("chose right case\n");
+        return "Queue is Empty";
     default:
         return "Internal Server Error";
     }

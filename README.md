@@ -354,3 +354,88 @@ README.md
 - [Priority Queues](https://www.geeksforgeeks.org/priority-queue-set-1-introduction/) 
 - [Client Server Interaction](https://developer.mozilla.org/en-US/docs/Learn/Server-side/First_steps/Client-Server_overview)
 - This assignment has been adapted from the [Berkeley File server project](https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://inst.eecs.berkeley.edu/~cs162/fa19/static/hw/hw4.pdf&ved=2ahUKEwiVgfHO9LSCAxWMl4kEHSV7CbkQFnoECBAQAQ&usg=AOvVaw0hQtqy7gU7bHvyYdloPUeh).
+
+
+Notes for change
+
+The error messages aren't sending properly but I think that we have the correct codes working in the background, it's really just an output problem. You can observe this by using the -v flag in the curl command when you run the GetJob command and such.
+
+Test:
+Running test 7 (Empty queue in GetJob)...
+Expected status code 598, got 200
+Test 7 failed
+
+My output (observe all the outputs and error codes (i.e. OK, QUEUE_IS_EMPTY, etc)):
+curl -v 'http://localhost:33496/1/dummy1.html'
+*   Trying 127.0.0.1:33496...
+* Connected to localhost (127.0.0.1) port 33496 (#0)
+> GET /1/dummy1.html HTTP/1.1
+> Host: localhost:33496
+> User-Agent: curl/7.81.0
+> Accept: */*
+> 
+* Mark bundle as not supporting multiuse
+* HTTP 1.0, assume close after body
+< HTTP/1.0 200 OK
+< Server: SimpleHTTP/0.6 Python/3.10.12
+< Date: Mon, 20 Nov 2023 03:59:33 GMT
+< Content-type: text/html
+< Content-Length: 95
+< Last-Modified: Tue, 14 Nov 2023 19:44:12 GMT
+< 
+<!DOCTYPE html>
+<html>
+        <body>
+                <h1>this file is in path /1/dummy1.html</h1>
+        </body>
+</html>
+* Closing connection 0
+
+$ curl -v 'http://localhost:33496/GetJob'
+*   Trying 127.0.0.1:33496...
+* Connected to localhost (127.0.0.1) port 33496 (#0)
+> GET /GetJob HTTP/1.1
+> Host: localhost:33496
+> User-Agent: curl/7.81.0
+> Accept: */*
+> 
+* Mark bundle as not supporting multiuse
+* HTTP 1.0, assume close after body
+< HTTP/1.0 200 OK
+< Content-Type: text/plain
+< 
+* Closing connection 0
+/1/dummy1.html
+
+$ curl -v 'http://localhost:33496/GetJob'
+*   Trying 127.0.0.1:33496...
+* Connected to localhost (127.0.0.1) port 33496 (#0)
+> GET /GetJob HTTP/1.1
+> Host: localhost:33496
+> User-Agent: curl/7.81.0
+> Accept: */*
+> 
+* Mark bundle as not supporting multiuse
+* HTTP 1.0, assume close after body
+< HTTP/1.0 598 Queue is Empty
+< Content-Type: text/html
+< 
+Queue is empty
+* Closing connection 0
+
+
+
+
+
+We aren't passing a really weird test:
+Priority error. Job 0 should be /5/dummy1.html,                      but is /9/dummy1.html
+Priority error. Job 1 should be /4/dummy1.html,                      but is /5/dummy1.html
+Priority error. Job 2 should be /3/dummy1.html,                      but is /4/dummy1.html
+Priority error. Job 3 should be /2/dummy1.html,                      but is /3/dummy1.html
+Priority error. Job 4 should be /1/dummy1.html,                      but is /2/dummy1.html
+Test 9 failed
+
+I have no idea where that random number 9 comes from because I've tested this on my own and the priority queue is working perfectly with the getjob request so I have a feeling it's a fault test. You can also observe that all the other ones are being popped in the correct order with the higher numbers being first (5 then 4 then 3 etc). Not sure why there is a 9 in the list and not a 1?
+
+I haven't worked with the workers yet, that will be the next thing after I fix a few of these errors
+

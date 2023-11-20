@@ -1,5 +1,7 @@
 #include "safequeue.h"
 #include <stdlib.h>
+#include <stdio.h>
+
 
 // Initialize the queue
 /*Initializes the queue, setting head and tail to NULL, size to 0,
@@ -33,10 +35,12 @@ void destroy_queue(safequeue_t *q) {
 // Enqueue data to the queue
 /*Adds a new element to the end of the queue. It waits if the queue is full*/
 void add_work(safequeue_t *q, void *data, int priority) {
-    pthread_mutex_lock(&q->lock);
+    //pthread_mutex_lock(&q->lock); //was causing deadlock
+
 
     // Wait while queue is full
     while (q->size == q->max_size) {
+        printf("Entered while\n");
         pthread_cond_wait(&q->not_full, &q->lock);
     }
 
@@ -45,10 +49,12 @@ void add_work(safequeue_t *q, void *data, int priority) {
     new_node->data = data;
     new_node->priority = priority;
     new_node->next = NULL;
+    //printf("Created a new node\n");
 
     // Find the correct position for the new node based on priority
     node_t **tracer = &q->head;
     while (*tracer != NULL && (*tracer)->priority >= priority) {
+        printf("Entered second while\n");
         tracer = &(*tracer)->next;
     }
     new_node->next = *tracer;
@@ -58,13 +64,16 @@ void add_work(safequeue_t *q, void *data, int priority) {
     if (q->tail == NULL || q->tail->next == new_node) {
         q->tail = new_node;
     }
+    //printf("updated tail\n");
 
     q->size++;
+    //printf("updated size\n");
 
     // Signal that the queue is not empty
     pthread_cond_signal(&q->not_empty);
+    //printf("Sent signal\n");
 
-    pthread_mutex_unlock(&q->lock);
+    //pthread_mutex_unlock(&q->lock);
 }
 
 
@@ -133,8 +142,12 @@ int safequeue_is_empty(safequeue_t *q) {
 // Get the size of the queue
 /*Returns the current size of the queue*/
 int safequeue_size(safequeue_t *q) {
+   // printf("Entered size\n");
     pthread_mutex_lock(&q->lock);
+    //printf("After size lock\n");
     int size = q->size;
+    //printf("size: %d\n", size);
     pthread_mutex_unlock(&q->lock);
+   // printf("After size unlock\n");
     return size;
 }

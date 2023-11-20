@@ -41,10 +41,10 @@ int fileserver_port;
 int max_queue_size;
 
 
-void serve_request(int client_fd);
+void serve_request(int client_fd, struct http_request *http_request);
 void free_http_request(struct http_request *req);
 
-
+/*
 void *worker_thread_function(void *arg) {
     while (1) {
         request_info_t *req_info = get_work_blocking(&request_queue);
@@ -55,6 +55,7 @@ void *worker_thread_function(void *arg) {
         }
     }
 }
+*/
 
 
 int get_request_priority(const char *path) {
@@ -66,6 +67,8 @@ int get_request_priority(const char *path) {
 
 
 void send_error_response(int client_fd, status_code_t err_code, char *err_msg) {
+    printf("Status code: %d\n", err_code);
+    printf("Entering here\n");
     http_start_response(client_fd, err_code);
     http_send_header(client_fd, "Content-Type", "text/html");
     http_end_headers(client_fd);
@@ -79,7 +82,8 @@ void send_error_response(int client_fd, status_code_t err_code, char *err_msg) {
  * forward the client request to the fileserver and
  * forward the fileserver response to the client
  */
-void serve_request(int client_fd) {
+void serve_request(int client_fd, struct http_request *http_request) {
+    printf("Entered serve_request\n");
 
     // create a fileserver socket
     int fileserver_fd = socket(PF_INET, SOCK_STREAM, 0);
@@ -87,16 +91,19 @@ void serve_request(int client_fd) {
         fprintf(stderr, "Failed to create a new socket: error %d: %s\n", errno, strerror(errno));
         exit(errno);
     }
+    printf("Did fileserver socket\n");
 
     // create the full fileserver address
     struct sockaddr_in fileserver_address;
     fileserver_address.sin_addr.s_addr = inet_addr(fileserver_ipaddr);
     fileserver_address.sin_family = AF_INET;
     fileserver_address.sin_port = htons(fileserver_port);
+    printf("Did fileserver address\n");
 
     // connect to the fileserver
-    int connection_status = connect(fileserver_fd, (struct sockaddr *)&fileserver_address,
-                                    sizeof(fileserver_address));
+    int connection_status = connect(fileserver_fd, (struct sockaddr *)&fileserver_address, sizeof(fileserver_address));
+    printf("Connected to fileserver\n");
+
     if (connection_status < 0) {
         // failed to connect to the fileserver
         printf("Failed to connect to the file server\n");
@@ -105,16 +112,35 @@ void serve_request(int client_fd) {
     }
 
     // successfully connected to the file server
-    char *buffer = (char *)malloc(RESPONSE_BUFSIZE * sizeof(char));
+    //char *buffer = (char *)malloc(RESPONSE_BUFSIZE * sizeof(char));
+    //printf("Did fileserver socket\n");
 
+    char request_buffer[RESPONSE_BUFSIZE];
+    sprintf(request_buffer, "%s %s HTTP/1.0\r\n\r\n", http_request->method, http_request->path);
+    http_send_data(fileserver_fd, request_buffer, strlen(request_buffer));
+
+    char response_buffer[RESPONSE_BUFSIZE];
+    int bytes_read;
+    while ((bytes_read = recv(fileserver_fd, response_buffer, RESPONSE_BUFSIZE - 1, 0)) > 0) {
+        http_send_data(client_fd, response_buffer, bytes_read);
+    }
+
+    // Close the connection to the fileserver
+    shutdown(fileserver_fd, SHUT_WR);
+    close(fileserver_fd);
+
+    /*
     // forward the client request to the fileserver
     int bytes_read = read(client_fd, buffer, RESPONSE_BUFSIZE);
+    printf("Passed bytes_read\n");
     int ret = http_send_data(fileserver_fd, buffer, bytes_read);
+    printf("Passed ret\n");
     if (ret < 0) {
         printf("Failed to send request to the file server\n");
         send_error_response(client_fd, BAD_GATEWAY, "Bad Gateway");
 
     } else {
+        printf("Entered deep else statement\n");
         // forward the fileserver response to the client
         while (1) {
             int bytes_read = recv(fileserver_fd, buffer, RESPONSE_BUFSIZE - 1, 0);
@@ -133,6 +159,7 @@ void serve_request(int client_fd) {
 
     // Free resources and exit
     free(buffer);
+    */
 }
 
 void free_http_request(struct http_request *req) {
@@ -154,26 +181,33 @@ int server_fds[MAX_LISTENERS]; // 65535 - 1024 + 1 (for inclusivity)
  */
 
 void handle_getjob_request(int client_fd) {
-    pthread_mutex_lock(&request_queue.lock);
+    //pthread_mutex_lock(&request_queue.lock);
     if (safequeue_is_empty(&request_queue)) {
-        pthread_mutex_unlock(&request_queue.lock);
+        //pthread_mutex_unlock(&request_queue.lock);
+        //http_start_response(client_fd, QUEUE_EMPTY);
         send_error_response(client_fd, QUEUE_EMPTY, "Queue is empty");
+        //printf("reached this point\n");
+        return;
     } else {
+        //pthread_mutex_lock(&request_queue.lock);
         request_info_t *dequeued_request = get_work_blocking(&request_queue);
-        pthread_mutex_unlock(&request_queue.lock);
+        //pthread_mutex_unlock(&request_queue.lock);
         http_start_response(client_fd, OK);
         http_send_header(client_fd, "Content-Type", "text/plain");
         http_end_headers(client_fd);
         http_send_string(client_fd, dequeued_request->request->path);
         free_http_request(dequeued_request->request);
         free(dequeued_request);
+        //printf("Fail 7\n");
     }
 }
 
 
 void handle_normal_request(int client_fd, struct http_request *http_request) {
+    //printf("Entered handle_normal_request\n");
     request_info_t *req_info = malloc(sizeof(request_info_t));
     if (req_info == NULL) {
+        //printf("Entered first h_n_r if statement\n");
         send_error_response(client_fd, SERVER_ERROR, "Server Error");
         return;
     }
@@ -182,15 +216,23 @@ void handle_normal_request(int client_fd, struct http_request *http_request) {
     req_info->client_fd = client_fd;
     int priority = get_request_priority(http_request->path);
 
-    pthread_mutex_lock(&request_queue.lock);
-    if (safequeue_size(&request_queue) < max_queue_size) {
+    
+    
+    //printf("Before finding size\n");
+    int val = safequeue_size(&request_queue);
+    //printf("val: %d\n", val);
+    if (val < max_queue_size) {
+        //printf("Entered second h_n_r if statement\n");
         add_work(&request_queue, req_info, priority);
     } else {
+        //printf("Entered first h_n_r else statement\n");
         send_error_response(client_fd, QUEUE_FULL, "Priority queue is full");
         free_http_request(http_request);
         free(req_info);
     }
-    pthread_mutex_unlock(&request_queue.lock);
+    
+    
+    
 }
 
 
@@ -247,26 +289,23 @@ void *serve_forever(void *arg) {
 
         printf("Accepted connection from %s on port %d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
 
-        /*
-        struct http_request *http_request = http_request_parse(client_fd);
+        
+        struct http_request *http_request = http_request_parse(client_fd); // This line fucks with the serve_request b/c it reads from the buffer
         if (http_request != NULL) {
             if (strcmp(http_request->path, GETJOBCMD) == 0) {
+                //printf("Entered second if statement\n");
                 handle_getjob_request(client_fd);
+                //printf("reaches here\n");
             } else {
+                //printf("Entered first else statement\n");
                 handle_normal_request(client_fd, http_request);
+                serve_request(client_fd, http_request);
             }
-            free_http_request(http_request);
         } else {
+            printf("Entered second else statement\n");
             send_error_response(client_fd, BAD_REQUEST, "Bad Request");
         }
-
-        if (http_request && strcmp(http_request->path, GETJOBCMD) != 0) {
-            serve_request(client_fd);
-        }
-        */
         
-       // remove
-       serve_request(client_fd);
 
         shutdown(client_fd, SHUT_WR);
         close(client_fd);   

@@ -115,7 +115,7 @@ char* get_work_nonblocking(safequeue_t *q) {
     // Check if queue is empty and return immediately
     if (q->size == 0) {
         pthread_mutex_unlock(&q->lock);
-        return -1;
+        return NULL;
     }
 
     // Dequeue logic (similar to get_work_blocking)

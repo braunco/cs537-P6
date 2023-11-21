@@ -34,19 +34,18 @@ void destroy_queue(safequeue_t *q) {
 
 // Enqueue data to the queue
 /*Adds a new element to the end of the queue. It waits if the queue is full*/
-void add_work(safequeue_t *q, void *data, int priority) {
-    //pthread_mutex_lock(&q->lock); //was causing deadlock
-
+void add_work(safequeue_t *q, int fd, int priority) {
+    pthread_mutex_lock(&q->lock); //was causing deadlock 
 
     // Wait while queue is full
     while (q->size == q->max_size) {
-        printf("Entered while\n");
+        //printf("Entered while\n");
         pthread_cond_wait(&q->not_full, &q->lock);
     }
 
     // Create a new node
     node_t *new_node = malloc(sizeof(node_t));
-    new_node->data = data;
+    new_node->fd = fd;
     new_node->priority = priority;
     new_node->next = NULL;
     //printf("Created a new node\n");
@@ -54,7 +53,7 @@ void add_work(safequeue_t *q, void *data, int priority) {
     // Find the correct position for the new node based on priority
     node_t **tracer = &q->head;
     while (*tracer != NULL && (*tracer)->priority >= priority) {
-        printf("Entered second while\n");
+        //printf("Entered second while\n");
         tracer = &(*tracer)->next;
     }
     new_node->next = *tracer;
@@ -73,14 +72,14 @@ void add_work(safequeue_t *q, void *data, int priority) {
     pthread_cond_signal(&q->not_empty);
     //printf("Sent signal\n");
 
-    //pthread_mutex_unlock(&q->lock);
+    pthread_mutex_unlock(&q->lock);
 }
 
 
 
 // Dequeue data from the queue
 /*Removes an element from the front of the queue. It waits if the queue is empty*/
-void *get_work_blocking(safequeue_t *q) {
+int get_work_blocking(safequeue_t *q) {
     pthread_mutex_lock(&q->lock);
 
     // Wait while queue is empty
@@ -90,7 +89,7 @@ void *get_work_blocking(safequeue_t *q) {
 
     // Remove the head node
     node_t *temp = q->head;
-    void *data = temp->data;
+    int fd = temp->fd;
     q->head = q->head->next;
     if (q->head == NULL) {
         q->tail = NULL;
@@ -104,31 +103,35 @@ void *get_work_blocking(safequeue_t *q) {
 
     pthread_mutex_unlock(&q->lock);
 
-    return data;
+    return fd;
 }
 
-void *get_work_nonblocking(safequeue_t *q) {
+//now returns -1 on fail.
+int get_work_nonblocking(safequeue_t *q) {
     pthread_mutex_lock(&q->lock);
     // Check if queue is empty and return immediately
     if (q->size == 0) {
         pthread_mutex_unlock(&q->lock);
-        return NULL;
+        return -1;
     }
 
     // Dequeue logic (similar to get_work_blocking)
     node_t *temp = q->head;
-    void *data = temp->data;
+    int fd = temp->fd;
     q->head = q->head->next;
     if (q->head == NULL) {
         q->tail = NULL;
     }
 
     q->size--;
+
+    // Signal that the queue is not full
+    pthread_cond_signal(&q->not_full);
+
     pthread_mutex_unlock(&q->lock);
 
     free(temp);  // Free the dequeued node
-    return data; // Return the data of the dequeued node
-
+    return fd; // Return the data of the dequeued node
 }
 // Check if the queue is empty
 /*Returns 1 if the queue is empty, otherwise 0.*/

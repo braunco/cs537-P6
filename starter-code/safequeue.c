@@ -35,7 +35,7 @@ void destroy_queue(safequeue_t *q) {
 // Enqueue data to the queue
 /*Adds a new element to the end of the queue. It waits if the queue is full*/
 void add_work(safequeue_t *q, void *data, int priority) {
-    //pthread_mutex_lock(&q->lock); //was causing deadlock
+    pthread_mutex_lock(&q->lock); //was causing deadlock
 
 
     // Wait while queue is full
@@ -73,7 +73,7 @@ void add_work(safequeue_t *q, void *data, int priority) {
     pthread_cond_signal(&q->not_empty);
     //printf("Sent signal\n");
 
-    //pthread_mutex_unlock(&q->lock);
+    pthread_mutex_unlock(&q->lock);
 }
 
 

@@ -127,7 +127,6 @@ class Test3(Test):
             exp_resp = requests.get(server_addr + self.path)
 
             for r in responses:
-                print(r)
                 if exp_resp.content != r.content:
                     self.score = 0
                     break

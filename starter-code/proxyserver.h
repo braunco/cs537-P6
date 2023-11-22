@@ -180,6 +180,8 @@ char *http_get_response_message(int status_code) {
     case QUEUE_EMPTY:
         //printf("chose right case\n");
         return "Queue is Empty";
+    case QUEUE_FULL:
+        return "Queue is Full";
     default:
         return "Internal Server Error";
     }

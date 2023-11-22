@@ -44,33 +44,29 @@ int max_queue_size;
 void serve_request(int client_fd, struct http_request *http_request);
 void free_http_request(struct http_request *req);
 
-/*
+
 void *worker_thread_function(void *arg) {
     while (1) {
         
-        //while(safequeue_is_empty(&request_queue)) {
-          //  pthread_cond_wait(&request_queue.not_empty, &request_queue.lock);
-        //}
-        
-
         request_info_t *req_info = get_work_blocking(&request_queue);
 
         if (req_info != NULL) {
-        int delay = req_info->request->delay ? atoi(req_info->request->delay) : 0;
-        if (delay > 0) {
-            sleep(delay);
+            int delay = req_info->request->delay ? atoi(req_info->request->delay) : 0;
+            if (delay > 0) {
+                sleep(delay);
+            }
+
+            printf("\t\tabout to serve request\n");
+            serve_request(req_info->client_fd, req_info->request);
+
+            //free_http_request(req_info->request);
+            //////////free(req_info);
         }
-
-        serve_request(req_info->client_fd, req_info->request);
-
-        free_http_request(req_info->request);
-        free(req_info);
-    }
     }
     
     return NULL;
 }
-*/
+
 
 
 int get_request_priority(const char *path) {
@@ -90,7 +86,7 @@ void send_error_response(int client_fd, status_code_t err_code, char *err_msg) {
     char *buf = malloc(strlen(err_msg) + 2);
     sprintf(buf, "%s\n", err_msg); // Added a line to see where print
     http_send_string(client_fd, buf);
-    free(buf);
+    /////////free(buf);
     return;
 }
 
@@ -138,12 +134,20 @@ void serve_request(int client_fd, struct http_request *http_request) {
     char response_buffer[RESPONSE_BUFSIZE];
     int bytes_read;
     while ((bytes_read = recv(fileserver_fd, response_buffer, RESPONSE_BUFSIZE - 1, 0)) > 0) {
-        http_send_data(client_fd, response_buffer, bytes_read);
+        if(http_send_data(client_fd, response_buffer, bytes_read) < 0) {
+            perror("COULDNT SEND DATA TO CLIENT");
+        }
     }
+
+    //printf("\tRESPONSE: %s\n", response_buffer);
 
     // Close the connection to the fileserver
     shutdown(fileserver_fd, SHUT_WR);
     close(fileserver_fd);
+    
+    //close connection to client
+    shutdown(client_fd, SHUT_WR);
+    close(client_fd);
 
     /*
     // forward the client request to the fileserver
@@ -212,8 +216,8 @@ void handle_getjob_request(int client_fd) {
         http_send_header(client_fd, "Content-Type", "text/plain");
         http_end_headers(client_fd);
         http_send_string(client_fd, dequeued_request->request->path);
-        free_http_request(dequeued_request->request);
-        free(dequeued_request);
+        /////////free_http_request(dequeued_request->request);
+        /////////free(dequeued_request);
         //printf("Fail 7\n");
     }
 }
@@ -232,17 +236,25 @@ void handle_normal_request(int client_fd, struct http_request *http_request) {
     req_info->client_fd = client_fd;
     int priority = get_request_priority(http_request->path);
 
-    int current_queue_size = safequeue_size(&request_queue);
+    //int current_queue_size = safequeue_size(&request_queue);
     
-    if (current_queue_size < max_queue_size) {
-        //printf("Entered second h_n_r if statement\n");
-        add_work(&request_queue, req_info, priority);
-    } else {
-        //printf("Entered first h_n_r else statement\n");
-        send_error_response(client_fd, QUEUE_FULL, "Priority queue is full");
-        free_http_request(http_request);
-        free(req_info);
+    if(add_work(&request_queue, req_info, priority) < 0) {
+        printf("priority queue full. path: %s\n", req_info->request->path);
+        send_error_response(client_fd, QUEUE_FULL, "Priority queue is full.");
+        printf("\tGOT PAST SEND ERROR RESP\n");
+        //free_http_request(http_request);
+        ////////////free(req_info);
     }
+
+    // if (current_queue_size < max_queue_size) {
+    //     //printf("Entered second h_n_r if statement\n");
+    //     add_work(&request_queue, req_info, priority);
+    // } else {
+    //     //printf("Entered first h_n_r else statement\n");
+    //     send_error_response(client_fd, QUEUE_FULL, "Priority queue is full");
+    //     free_http_request(http_request);
+    //     free(req_info);
+    // }
     
     
     
@@ -313,7 +325,7 @@ void *serve_forever(void *arg) {
             } else {
                 //printf("Entered first else statement\n");
                 handle_normal_request(client_fd, http_request);
-                serve_request(client_fd, http_request);
+                //serve_request(client_fd, http_request);
             }
         } else {
             printf("Entered second else statement\n");
@@ -321,8 +333,8 @@ void *serve_forever(void *arg) {
         }
         
 
-        shutdown(client_fd, SHUT_WR);
-        close(client_fd);   
+        //shutdown(client_fd, SHUT_WR);
+        //close(client_fd);   
     }
 
 
@@ -429,7 +441,7 @@ int main(int argc, char **argv) {
     }
 
 
-    /*
+    
     // Create worker threads
     pthread_t worker_threads[num_workers];
     for (int i = 0; i < num_workers; ++i) {
@@ -438,7 +450,12 @@ int main(int argc, char **argv) {
             // Handle error
         }
     }
-    */
+    
+    //one for now
+    // pthread_t worker_thread;
+    // if(pthread_create(&worker_thread, NULL, worker_thread_function, NULL) < 0) {
+    //     perror("failed to create worker thread");
+    // }
 
     // Join threads
     for (int i = 0; i < num_listener; ++i) {
@@ -448,13 +465,16 @@ int main(int argc, char **argv) {
         }
     }
 
-    /*
+    
     // Join worker threads
     for (int i = 0; i < num_workers; ++i) {
         pthread_join(worker_threads[i], NULL);
     }
+
+    //pthread_join(worker_thread, NULL);
+
     destroy_queue(&request_queue);
-    */
+    
     free(threads); // Free the threads array
 
     return EXIT_SUCCESS;

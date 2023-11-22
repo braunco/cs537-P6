@@ -34,15 +34,21 @@ void destroy_queue(safequeue_t *q) {
 
 // Enqueue data to the queue
 /*Adds a new element to the end of the queue. It waits if the queue is full*/
-void add_work(safequeue_t *q, void *data, int priority) {
+int add_work(safequeue_t *q, void *data, int priority) {
     pthread_mutex_lock(&q->lock); //was causing deadlock
+
+    printf("size: %d, max_size: %d\n", q->size, q->max_size);
+    if(q->size == q->max_size) {
+        pthread_mutex_unlock(&q->lock);
+        return -1;
+    }
 
 
     // Wait while queue is full
-    while (q->size == q->max_size) {
-        printf("Entered while\n");
-        pthread_cond_wait(&q->not_full, &q->lock);
-    }
+    // while (q->size == q->max_size) {
+    //     printf("\t\tEntered while\n");
+    //     pthread_cond_wait(&q->not_full, &q->lock);
+    // }
 
     // Create a new node
     node_t *new_node = malloc(sizeof(node_t));
@@ -54,7 +60,7 @@ void add_work(safequeue_t *q, void *data, int priority) {
     // Find the correct position for the new node based on priority
     node_t **tracer = &q->head;
     while (*tracer != NULL && (*tracer)->priority >= priority) {
-        printf("Entered second while\n");
+        //printf("Entered second while\n");
         tracer = &(*tracer)->next;
     }
     new_node->next = *tracer;
@@ -74,6 +80,7 @@ void add_work(safequeue_t *q, void *data, int priority) {
     //printf("Sent signal\n");
 
     pthread_mutex_unlock(&q->lock);
+    return 0;
 }
 
 

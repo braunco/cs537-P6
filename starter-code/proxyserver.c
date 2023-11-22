@@ -16,7 +16,7 @@
 
 #include "proxyserver.h"
 
-#include "safequeue.h"
+#include "safepqueue.h"
 
 safequeue_t request_queue;
 

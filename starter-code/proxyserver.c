@@ -219,6 +219,8 @@ void handle_getjob_request(int client_fd) {
         http_send_header(client_fd, "Content-Type", "text/plain");
         http_end_headers(client_fd);
         http_send_string(client_fd, dequeued_request->request->path);
+        shutdown(client_fd, SHUT_WR);
+        close(client_fd);
         /////////free_http_request(dequeued_request->request);
         /////////free(dequeued_request);
         //printf("Fail 7\n");

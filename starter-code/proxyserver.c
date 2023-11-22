@@ -52,6 +52,7 @@ void *worker_thread_function(void *arg) {
 
         if (req_info != NULL) {
             int delay = req_info->request->delay ? atoi(req_info->request->delay) : 0;
+            printf("delay: %i\n", delay);
             if (delay > 0) {
                 sleep(delay);
             }

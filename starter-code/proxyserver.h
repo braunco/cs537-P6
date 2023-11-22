@@ -145,6 +145,22 @@ struct http_request *http_request_parse(int fd) {
         if (*read_end != '\n') break;
         read_end++;
 
+        //find 'delay' header
+        char* delayHeader = strstr(read_end, DelayHeader);
+        if(delayHeader == NULL) {
+            request->delay = malloc(sizeof(char) * 3);
+            strcpy(request->delay, "0");
+        }
+        else {
+            //there is a delay header
+            char* endOfDelayHeader = strstr(delayHeader, "\r\n");
+            char* startOfDelayValue = strstr(delayHeader, ":") + 1;
+            int numChars = endOfDelayHeader - startOfDelayValue;
+            request->delay = malloc(sizeof(char) * numChars);
+            memset(request->delay, 0, numChars);
+            strncpy(request->delay, startOfDelayValue, numChars);
+        }
+
         free(read_buffer);
         return request;
     } while (0);

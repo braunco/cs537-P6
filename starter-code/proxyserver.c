@@ -88,6 +88,8 @@ void send_error_response(int client_fd, status_code_t err_code, char *err_msg) {
     sprintf(buf, "%s\n", err_msg); // Added a line to see where print
     http_send_string(client_fd, buf);
     /////////free(buf);
+    shutdown(client_fd, SHUT_WR);
+    close(client_fd);
     return;
 }
 
@@ -242,8 +244,6 @@ void handle_normal_request(int client_fd, struct http_request *http_request) {
     if(add_work(&request_queue, req_info, priority) < 0) {
         printf("priority queue full. path: %s\n", req_info->request->path);
         send_error_response(client_fd, QUEUE_FULL, "Priority queue is full.");
-        shutdown(client_fd, SHUT_WR);
-        close(client_fd);
         printf("\tGOT PAST SEND ERROR RESP\n");
         //free_http_request(http_request);
         ////////////free(req_info);

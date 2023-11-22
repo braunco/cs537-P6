@@ -14,7 +14,7 @@ $(EXECUTABLE): $(OBJECTS)
 	$(CC) $(CFLAGS) $< -o $@
 
 test: all
-	../tests/runtests
+	~cs537-1/tests/P6/runtests
 
 clean:
 	rm -f $(EXECUTABLE) $(OBJECTS)
